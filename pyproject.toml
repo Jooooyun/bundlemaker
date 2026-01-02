@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bundlemaker"
+name = "bundlemaker-cli"
 version = "1.0.0"
 description = "CLI tool that bundles multi-file projects into a single GPT-friendly text file."
 readme = "README.md"
