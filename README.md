@@ -29,6 +29,71 @@ Point it at your project, get one clean text bundle, and feed it to your LLM.
 - **TUI-style UX**  
   Colored output, progress, remaining-only view, jump by index, quick commands.
 
+- **Smart file selection (hard-coded)**  
+  - Only specific source-like extensions are included  
+  - Common junk / build / VCS directories are ignored  
+  - Generated files from BundleMaker itself are never re-scanned
+
+---
+
+## File selection rules
+
+BundleMaker is opinionated on purpose. It only picks “code-ish” files and avoids obvious trash / secrets.
+
+### Included extensions
+
+Only files with these lowercase extensions are scanned:
+
+- `py`, `sql`
+- `html`, `css`, `js`
+- `c`, `h`
+- `cpp`, `hpp`, `cc`, `hh`
+- `cs`
+
+If you’re wondering “why didn’t my file show up?”,  
+check the extension first. If it’s not in this list, it’s ignored.
+
+### Ignored directories
+
+These directories are skipped recursively while walking:
+
+- VCS / tooling:  
+  - `.git`, `.svn`, `.hg`
+  - `.idea`, `.vscode`
+- Python / build junk:  
+  - `__pycache__`, `.pytest_cache`
+  - `dist`, `build`
+  - `venv`, `.venv`
+- Node / frontend:  
+  - `node_modules`
+
+If your code lives under one of these, move it or relax the rules in the script.
+
+### Auto-read skip rules
+
+Even if a file passes the extension filter, auto-read may still skip it:
+
+- **By name** (exact match):
+  - `.env`, `.env.local`, `.env.production`, `.env.development`
+  - `id_rsa`, `id_dsa`, `id_ed25519`
+- **By extension**:
+  - `pem`, `key`, `p12`, `pfx`, `der`, `crt`, `cer`
+- **By size**:
+  - Larger than **5 MB** → skipped (`too-large(...)`)
+- **By content**:
+  - Contains NULL bytes → treated as binary and skipped
+
+Skipped files and reasons are visible in AUTO mode in the `SKIPPED (auto-read)` section at the top of the bundle.
+
+### Generated / internal files
+
+These files are **never** scanned or re-included:
+
+- `bundle.txt` (the final output)
+- `bundle_state.json` (interactive session state)
+
+So you can safely re-run BundleMaker in the same folder without it eating its own output.
+
 ---
 
 ## Installation (local script)
@@ -46,6 +111,8 @@ You’ll be asked to:
 1. Select a mode: `HYBRID / PASTE / AUTO`
 2. Paste your project root path (or hit Enter for current directory)
 3. Let the tool scan and build the bundle
+
+_PyPI / `pip install bundlemaker` is planned, not live yet._
 
 ---
 
@@ -92,13 +159,13 @@ Paste project root path (Enter = current folder) > C:\proj1;C:\proj2
 
 In HYBRID/PASTE mode:
 
-- `Enter`  → next unfinished file  
-- `<number>` → jump to file index  
-- `a` → set next action to AUTO-READ  
-- `p` → set next action to PASTE  
-- `m` → cycle mode (HYBRID → PASTE → AUTO)  
-- `r` → toggle “remaining-only” view  
-- `q` → quit (with warning if some files have no content)
+- `Enter`      → next unfinished file  
+- `<number>`   → jump to file index  
+- `a`          → set next action to AUTO-READ  
+- `p`          → set next action to PASTE  
+- `m`          → cycle mode (HYBRID → PASTE → AUTO)  
+- `r`          → toggle “remaining-only” view  
+- `q`          → quit (with warning if some files have no content)
 
 For paste mode, end the current file by typing:
 
@@ -149,4 +216,4 @@ and the model gets the full project context in one shot.
 
 ## License
 
-MIT License.  
+MIT License.
