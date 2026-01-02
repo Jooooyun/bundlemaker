@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bundlemaker"
+version = "1.0.0"
+description = "CLI tool that bundles multi-file projects into a single GPT-friendly text file."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Jo Yun-Sung" }
+]
+keywords = ["gpt", "ai", "bundle", "cli", "developer-tools"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+]
+
+[project.scripts]
+bundlemaker = "bundlemaker:main"
+
+[tool.setuptools]
+py-modules = ["bundlemaker"]
