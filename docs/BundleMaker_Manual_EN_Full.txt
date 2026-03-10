@@ -1,0 +1,694 @@
+BundleMaker v2.2.0 - Full User Manual (English)
+
+==================================================
+1. Overview
+==================================================
+
+BundleMaker is a Python CLI tool that collects multi-file projects into a single bundle.txt,
+applies modified bundles back to the real project,
+verifies the applied result,
+and restores the previous state when needed.
+
+It is especially designed for LLM / generative AI workflows where multi-file project context
+often becomes fragmented or inconsistent.
+
+Core workflow:
+
+Project scan
+-> bundle.txt creation
+-> send to LLM / generative AI
+-> save modified result as bundle_modified.txt
+-> apply patch to real project
+-> verify result
+-> restore if needed
+
+
+==================================================
+2. What problem does it solve?
+==================================================
+
+When you send a multi-file project directly to an LLM, common issues include:
+
+1) only part of the code is considered
+2) project intent and implementation get separated
+3) applying the modified result back to the real project is tedious and risky
+4) rollback is difficult if something goes wrong
+
+BundleMaker reduces these problems by providing:
+
+- a single bundle.txt that contains the project context
+- automated patch application from modified bundles
+- post-apply verification
+- manifest / backup / snapshot-based restore support
+
+
+==================================================
+3. Main Features
+==================================================
+
+[1] STEP 1 - Bundle creation
+Reads project files and builds a single bundle.txt.
+
+Supported modes:
+- AUTO   : automatically reads files and builds the bundle
+- PASTE  : manually paste file contents
+- HYBRID : automatic read first, manual fallback for failed files
+
+[2] STEP 3 - Patch apply
+Compares the original bundle and the modified bundle, then applies the changes to the real project.
+
+Supported strategies:
+- SAFE   : apply small changes and new files only, skip deletes
+- FULL   : apply all changes, including deletes
+- DRY RUN: generate a diff report only, no actual writes
+
+[3] VERIFY
+Checks whether the patch was actually applied correctly.
+
+- VERIFY-A : compare modified bundle against real disk files
+- VERIFY-B : rebuild a fresh bundle from disk and compare again
+
+[4] RESTORE
+Rolls back using manifests, backups, and deleted snapshots.
+
+- restore modified files
+- recover deleted files
+- quarantine created files
+- perform restore verify
+
+[5] CONFIG WIZARD
+Creates and manages .bundlemaker.json interactively.
+
+Configurable items:
+- allowed extensions
+- excluded directories
+
+
+==================================================
+4. Directory Layout
+==================================================
+
+Internal generated artifacts are stored under:
+
+<PROJECT_ROOT>/
+  .bundlemaker/
+    state/
+    manifests/
+    reports/
+    backups/
+    locks/
+    quarantine/
+
+Bundle output files are stored under the current working directory:
+
+<CWD>/
+  bundles/
+    bundle.txt
+    bundle_applied_<timestamp>.txt
+
+Always excluded from scanning:
+- .bundlemaker
+- bundles
+
+This prevents the tool from re-bundling its own internal/generated files.
+
+
+==================================================
+5. Default Supported Extensions
+==================================================
+
+Default allowed extensions:
+
+- py
+- sql
+- html
+- css
+- js
+- c
+- h
+- cpp
+- hpp
+- cc
+- hh
+- cs
+
+This list can be modified through the config wizard or the .bundlemaker.json file.
+
+
+==================================================
+6. Default Excluded Directories
+==================================================
+
+Default excluded directories:
+
+- .git
+- .svn
+- .hg
+- __pycache__
+- .pytest_cache
+- node_modules
+- venv
+- .venv
+- dist
+- build
+- .idea
+- .vscode
+- .bundlemaker
+- bundles
+
+
+==================================================
+7. Installation and Execution
+==================================================
+
+Run it in a Python 3 environment.
+
+Basic execution:
+python bundlemaker.py
+
+Or:
+./bundlemaker.py
+
+Running the script opens the main menu.
+
+
+==================================================
+8. Main Menu
+==================================================
+
+[1] STEP 1 — Create bundle from project
+Create bundle.txt from project files.
+
+[2] STEP 3 — Apply patch from modified bundle (+VERIFY)
+Apply the modified bundle to the real project and verify the result.
+
+[c] Configure — create/overwrite .bundlemaker.json
+Create or overwrite the configuration file.
+
+[r] Restore — rollback from patch manifest backups
+Restore a previous patch state.
+
+[q] Quit
+Exit the program.
+
+
+==================================================
+9. Configuration File (.bundlemaker.json)
+==================================================
+
+BundleMaker uses .bundlemaker.json to control:
+
+1) extensions
+2) exclude_dirs
+
+Each section supports two modes:
+
+- default mode
+  Start from the built-in default list, then apply add / remove
+
+- custom mode
+  Use only the values listed in only
+
+
+==================================================
+10. How to Configure Extensions
+==================================================
+
+There are two ways to configure extensions:
+
+Method 1) Use the Configure menu or --config
+Method 2) Edit .bundlemaker.json manually
+
+----------------------------------------
+10-1. Configure with Wizard
+----------------------------------------
+
+Run:
+
+python bundlemaker.py --config
+
+Or start the program and select:
+c
+
+The wizard asks:
+
+- whether to use default extensions
+- whether to add more extensions
+- whether to remove some extensions
+- whether to use custom-only mode
+
+Example 1) Use defaults + add md
+- Use DEFAULT extensions? -> Yes
+- Add extensions -> md
+- Remove extensions -> (leave empty)
+
+Result:
+the default extension set plus md
+
+Example 2) Include only cpp and hpp
+- Use DEFAULT extensions? -> No
+- Select ONLY extensions to include -> cpp,hpp
+
+Result:
+only cpp and hpp are scanned
+
+----------------------------------------
+10-2. Edit the config file directly
+----------------------------------------
+
+Example A) Use defaults + add md
+
+{
+  "extensions": {
+    "mode": "default",
+    "only": [],
+    "add": ["md"],
+    "remove": []
+  }
+}
+
+Example B) Include only py and md
+
+{
+  "extensions": {
+    "mode": "custom",
+    "only": ["py", "md"],
+    "add": [],
+    "remove": []
+  }
+}
+
+Important:
+Extensions should be written without a leading dot.
+Examples:
+- py
+- md
+- cpp
+
+
+==================================================
+11. How to Configure Excluded Directories
+==================================================
+
+Excluded directories can be configured in the same way.
+
+----------------------------------------
+11-1. Configure with Wizard
+----------------------------------------
+
+Example 1) Use defaults + add docs_temp
+- Use DEFAULT exclude dirs? -> Yes
+- Add exclude dirs -> docs_temp
+- Remove exclude dirs -> (leave empty)
+
+Example 2) Use custom mode with tmp and logs only
+- Use DEFAULT exclude dirs? -> No
+- Select ONLY dirs to exclude -> tmp,logs
+
+----------------------------------------
+11-2. Edit the config file directly
+----------------------------------------
+
+Example A) Use defaults + add docs_temp
+
+{
+  "exclude_dirs": {
+    "mode": "default",
+    "only": [],
+    "add": ["docs_temp"],
+    "remove": []
+  }
+}
+
+Example B) Exclude only tmp and logs
+
+{
+  "exclude_dirs": {
+    "mode": "custom",
+    "only": ["tmp", "logs"],
+    "add": [],
+    "remove": []
+  }
+}
+
+Important:
+.bundlemaker and bundles are always hard-excluded.
+They will not become scannable even if removed from config.
+
+
+==================================================
+12. STEP 1 - How Bundle Creation Works
+==================================================
+
+STEP 1 creates bundle.txt from project files.
+
+Supported modes:
+- AUTO
+- PASTE
+- HYBRID
+
+----------------------------------------
+12-1. AUTO mode
+----------------------------------------
+
+Command:
+python bundlemaker.py --auto
+
+Behavior:
+- scans the project automatically
+- reads only allowed extensions
+- includes readable files in bundle.txt
+- saves the result as bundles/bundle.txt
+
+Advantages:
+- fastest option
+- best for typical source projects
+
+----------------------------------------
+12-2. PASTE mode
+----------------------------------------
+
+Command:
+python bundlemaker.py --paste
+
+Behavior:
+- user pastes each file manually
+- finish each pasted section by typing \END on a single line
+
+Advantages:
+- useful for external code snippets
+- works even when auto-read is not appropriate
+
+----------------------------------------
+12-3. HYBRID mode
+----------------------------------------
+
+Command:
+python bundlemaker.py --hybrid
+
+Or choose HYBRID from the interactive menu.
+
+Behavior:
+- tries auto-read first
+- falls back to manual paste for failed files
+
+Advantages:
+- balance between convenience and flexibility
+
+----------------------------------------
+12-4. Resume support
+----------------------------------------
+
+If STEP 1 is interrupted, progress is saved in:
+
+<PROJECT_ROOT>/.bundlemaker/state/bundle_state.json
+
+You can resume later.
+
+
+==================================================
+13. Example Bundle Format
+==================================================
+
+A generated bundle roughly looks like this:
+
+=== BUNDLE GENERATED: 2026-03-09T12:34:56 ===
+=== REL_ROOT: C:\project ===
+
+=== FILE: src/main.py ===
+print("hello")
+=== END FILE: src/main.py ===
+
+Each file is wrapped with FILE / END FILE markers.
+
+
+==================================================
+14. Example LLM Prompt Usage
+==================================================
+
+In actual usage, you can send bundle.txt together with a master/spec document.
+
+Example prompt:
+
+1.bundle.txt에는 모든 코드가 들어있고 master문서(EX.개발 명세서) 에는 이 프로젝트의 기획이 담겨있다. 이 모든걸 종합적으로 꼼꼼히 확인하여 지금 코드에서 나타나는 문제점과 버그를 알려줘라
+
+You can also extend it into modification prompts, for example:
+
+- Review all files and fix the bugs
+- Return the full modified result in bundle format
+- Keep current behavior but improve null handling
+
+Then save the result as:
+bundle_modified.txt
+
+
+==================================================
+15. STEP 3 - How Patch Apply Works
+==================================================
+
+Command:
+python bundlemaker.py --patch
+
+Or choose menu option:
+2
+
+Input:
+- Original bundle path
+- Modified bundle path
+
+Common files:
+Original:
+bundles/bundle.txt
+
+Modified:
+bundle_modified.txt
+
+Then choose the patch strategy:
+
+- 1 = SAFE
+- 2 = FULL
+- 3 = DRY RUN
+
+----------------------------------------
+15-1. SAFE
+----------------------------------------
+
+Applies:
+- small changes
+- new files
+
+Skips:
+- large changes
+- deletes
+
+Recommended when you want a conservative apply strategy.
+
+----------------------------------------
+15-2. FULL
+----------------------------------------
+
+Applies:
+- all changes
+- deletes included
+
+More powerful, but also more risky.
+For important projects, DRY RUN or SAFE is recommended first.
+
+----------------------------------------
+15-3. DRY RUN
+----------------------------------------
+
+No actual project files are modified.
+Only a diff report is generated.
+
+Useful for pre-checking changes.
+
+
+==================================================
+16. VERIFY
+==================================================
+
+After patching, BundleMaker automatically runs verification.
+
+VERIFY-A
+- compares the modified bundle against the actual disk files
+
+VERIFY-B
+- rebuilds a fresh bundle from the project and compares again
+
+This helps prove not only that the patch was attempted,
+but that the real project actually matches the intended result.
+
+
+==================================================
+17. RESTORE
+==================================================
+
+Command:
+python bundlemaker.py --restore
+
+Or choose:
+r
+
+Restore uses:
+- manifest
+- backup_map
+- deleted_snapshots
+- pre_hashes
+
+Restore process:
+1) restore backed-up files
+2) recover deleted files from snapshots
+3) optionally quarantine created files
+4) run restore verify
+
+This is not just a raw copy-back process.
+It includes verification.
+
+
+==================================================
+18. Auto-read Limits and Safety Features
+==================================================
+
+AUTO mode may skip:
+
+- files larger than 5MB
+- binary files
+- sensitive names such as .env or id_rsa
+- sensitive extensions such as .pem, .key, .pfx, .crt
+
+Safety features include:
+
+- atomic writes
+- root boundary checks
+- path traversal prevention
+- patch manifest generation
+- backup handling
+- STEP 3 lock
+- verify / restore verify
+- created file quarantine
+
+So BundleMaker is not just a bundler.
+It is a workflow-oriented apply / verify / restore tool.
+
+
+==================================================
+19. Real Usage Examples
+==================================================
+
+----------------------------------------
+Example 1) Bundle an entire Python project
+----------------------------------------
+
+Situation:
+- Python-based project
+- use default extensions
+
+Steps:
+1. python bundlemaker.py --auto
+2. confirm bundles/bundle.txt exists
+3. send bundle.txt to the LLM
+4. save result as bundle_modified.txt
+5. python bundlemaker.py --patch
+6. choose SAFE
+7. check verify result
+
+----------------------------------------
+Example 2) Include only cpp and hpp in a C/C++ project
+----------------------------------------
+
+Situation:
+- scan only cpp and hpp
+
+Steps:
+1. python bundlemaker.py --config
+2. extensions -> custom -> only = cpp,hpp
+3. create the bundle
+4. continue with patch / verify workflow
+
+----------------------------------------
+Example 3) Include Markdown documents too
+----------------------------------------
+
+Situation:
+- you want code plus md docs in the bundle
+
+Steps:
+1. python bundlemaker.py --config
+2. extensions -> default
+3. add -> md
+4. create the bundle
+5. now README/spec documents can be included too
+
+----------------------------------------
+Example 4) Review only, no real apply
+----------------------------------------
+
+Situation:
+- you want to inspect the diff before applying
+
+Steps:
+1. python bundlemaker.py --patch
+2. select original / modified bundle
+3. choose DRY RUN
+4. inspect the report under reports/
+
+----------------------------------------
+Example 5) Restore after a bad patch
+----------------------------------------
+
+Situation:
+- the applied patch is not acceptable
+
+Steps:
+1. python bundlemaker.py --restore
+2. choose the manifest
+3. run restore
+4. inspect restore verify result
+
+
+==================================================
+20. Recommended Usage Order
+==================================================
+
+Recommended order:
+
+1) Configure rules
+2) Create bundle
+3) Send it to the LLM
+4) Save the modified result as bundle_modified.txt
+5) Run patch
+6) Check verify reports
+7) Restore if necessary
+
+For important projects:
+
+- start with DRY RUN
+- then SAFE
+- use FULL only when necessary
+
+
+==================================================
+21. Current Status
+==================================================
+
+BundleMaker v2.2.0 is a personal experimental tool that has grown into a practical internal workflow utility.
+
+Current characteristics:
+- suitable for text-based source projects
+- practical for multi-file LLM workflows
+- includes patch / verify / restore
+- usable in practice, but still evolving
+
+
+==================================================
+22. Summary
+==================================================
+
+BundleMaker v2.2.0 turns multi-file projects into a single LLM-friendly bundle.txt,
+applies modified results back to the real project safely,
+and supports verification and restore.
+
+One-line summary:
+
+An LLM-assisted bundling / patch / verify / restore workflow tool for multi-file projects
