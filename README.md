@@ -1,152 +1,290 @@
-# BundleMaker
+# BundleMaker v2.2.0
 
-CLI tool that scans your project, collects source files, and builds a single GPT-friendly `bundle.txt`.
+LLM-friendly project bundler with patch apply, verify, and restore workflow support.
 
-No more copy-pasting 30 files into an AI chat window like an idiot.  
-Point it at your project, get one clean text bundle, and feed it to your LLM.
+BundleMaker is a Python CLI tool for packaging an entire source project into a single `bundle.txt`, sending it to an LLM for review or modification, then safely applying the modified result back to the real project with verification and rollback support.
+
+---
+
+## Why BundleMaker?
+
+When using LLMs on multi-file projects, context often breaks down:
+
+- only part of the code is considered
+- project intent and implementation become separated
+- modified results are hard to patch back safely
+- rollback is painful when something goes wrong
+
+BundleMaker was built to reduce that friction.
+
+It supports a full workflow:
+
+**Project → Bundle → LLM modification → Patch apply → Verify → Restore**
 
 ---
 
 ## Features
 
-- **Auto mode**  
-  Scan directories, auto-read files, build `bundle.txt`, then exit.
+### Bundle creation
+Creates a single `bundle.txt` from multiple project files.
 
-- **Hybrid mode** (default)  
-  Try auto-read first. If it fails (binary, encoding, size), fall back to manual paste.
+Supported modes:
 
-- **Paste-only mode**  
-  Fully manual: you paste content for each file and finish with `\END`.
+- **AUTO** — automatically reads files and builds a bundle
+- **PASTE** — manually paste file contents
+- **HYBRID** — auto-read first, manual fallback if needed
 
-- **Resumable sessions**  
-  State is saved in `bundle_state.json`, so you can stop and resume later.
+### Patch apply
+Compares the original bundle and the modified bundle, then applies the changes back to the real project.
 
-- **Safe auto-read**  
-  - Skips large files (default: > 5 MB)  
-  - Skips suspicious names/extensions (`.env`, keys, certs, etc.)  
-  - Detects binary files via NULL bytes  
+Strategies:
 
-- **TUI-style UX**  
-  Colored output, progress, remaining-only view, jump by index, quick commands.
+- **SAFE** — small changes + new files only, no deletes
+- **FULL** — apply all changes including deletes
+- **DRY RUN** — report only, no actual writes
+
+### Verification
+Performs real post-apply verification.
+
+- **VERIFY-A** — compares modified bundle against actual disk files
+- **VERIFY-B** — rebuilds a fresh bundle from disk and compares again
+
+### Restore / rollback
+Supports rollback using:
+
+- manifest records
+- file backups
+- deleted file snapshots
+- restore verification
+- created file quarantine
+
+### Config wizard
+Interactive generation of `.bundlemaker.json` for:
+
+- allowed extensions
+- excluded directories
 
 ---
 
-## Installation (local script)
+## Typical workflow
 
-For now, clone the repo and run the script directly:
-
+### 1. Create a bundle
 ```bash
-git clone https://github.com/Jooooyun/bundlemaker.git
-cd bundlemaker
-python bundlemaker.py
+python bundlemaker.py --auto
 ```
 
-You’ll be asked to:
-
-1. Select a mode: `HYBRID / PASTE / AUTO`
-2. Paste your project root path (or hit Enter for current directory)
-3. Let the tool scan and build the bundle
-
----
-
-## Usage
-
-### Basic
-
-```bash
-python bundlemaker.py
-```
-
-- Select mode on the prompt  
-- Paste project path  
-- Let it run
-
-### With CLI flags
-
-```bash
-# Force AUTO mode (non-interactive bundle build)
-python bundlemaker.py --auto /path/to/project
-
-# PASTE mode only
-python bundlemaker.py --paste /path/to/project
-
-# HYBRID mode (default behavior)
-python bundlemaker.py --hybrid /path/to/project
-```
-
-Multiple paths:
-
-```bash
-python bundlemaker.py --auto /path/to/project1 /path/to/project2
-```
-
-Or via prompt:
+This generates:
 
 ```text
-Paste project root path (Enter = current folder) > C:\proj1;C:\proj2
+bundles/bundle.txt
 ```
 
----
+### 2. Send the bundle to your LLM
+A typical prompt example:
 
-## Interactive controls
+> 1.bundle.txt에는 모든 코드가 들어있고 master문서(EX.개발 명세서) 에는 이 프로젝트의 기획이 담겨있다. 이 모든걸 종합적으로 꼼꼼히 확인하여 지금 코드에서 나타나는 문제점과 버그를 알려줘라
 
-In HYBRID/PASTE mode:
-
-- `Enter`  → next unfinished file  
-- `<number>` → jump to file index  
-- `a` → set next action to AUTO-READ  
-- `p` → set next action to PASTE  
-- `m` → cycle mode (HYBRID → PASTE → AUTO)  
-- `r` → toggle “remaining-only” view  
-- `q` → quit (with warning if some files have no content)
-
-For paste mode, end the current file by typing:
+Then save the modified result as:
 
 ```text
-\END
+bundle_modified.txt
 ```
 
-on a single line.
+### 3. Apply the patch
+```bash
+python bundlemaker.py --patch
+```
+
+### 4. Verify the result
+BundleMaker automatically runs verification after patching.
+
+### 5. Restore if needed
+```bash
+python bundlemaker.py --restore
+```
 
 ---
 
-## Output format
-
-The tool generates a single `bundle.txt` with this structure:
+## Main menu
 
 ```text
-=== BUNDLE GENERATED: 2025-01-01T12:34:56 ===
-=== REL_ROOT: /absolute/path/to/project ===
-
-=== SKIPPED (auto-read) ===
-- path/to/secret.pem :: skip-ext(.pem)
-- path/to/huge.log :: too-large(12345678 bytes)
-
-=== FILE: src/app.py ===
-... file content ...
-
-=== END FILE: src/app.py ===
-
-=== FILE: templates/index.html ===
-... file content ...
-
-=== END FILE: templates/index.html ===
+[1] STEP 1 — Create bundle from project
+[2] STEP 3 — Apply patch from modified bundle (+VERIFY)
+[c] Configure — create/overwrite .bundlemaker.json
+[r] Restore — rollback from patch manifest backups
+[q] Quit
 ```
 
-Drop this file into ChatGPT / Claude / whatever,  
-and the model gets the full project context in one shot.
+---
+
+## CLI options
+
+### Configure
+```bash
+python bundlemaker.py --config
+python bundlemaker.py --configure
+```
+
+### Bundle creation
+```bash
+python bundlemaker.py --auto
+python bundlemaker.py --paste
+python bundlemaker.py --hybrid
+```
+
+### Patch apply
+```bash
+python bundlemaker.py --patch
+python bundlemaker.py --apply-patch
+```
+
+### Restore
+```bash
+python bundlemaker.py --restore
+python bundlemaker.py --rollback
+```
 
 ---
 
-## Roadmap
+## Directory layout
 
-- VSCode extension integration  
-- Configurable extension / skip rules  
-- Optional JSON / Markdown bundle formats  
-- Direct “AI diff → patch” helper
+Internal artifacts are stored under the project root:
+
+```text
+<PROJECT_ROOT>/
+└─ .bundlemaker/
+   ├─ state/
+   ├─ manifests/
+   ├─ reports/
+   ├─ backups/
+   ├─ locks/
+   └─ quarantine/
+```
+
+Generated bundles are stored under the current working directory:
+
+```text
+<CWD>/
+└─ bundles/
+   ├─ bundle.txt
+   └─ bundle_applied_<timestamp>.txt
+```
+
+These paths are automatically excluded from scanning:
+
+- `.bundlemaker`
+- `bundles`
 
 ---
 
-## License
+## Default supported extensions
 
-MIT License.  
+```text
+py, sql,
+html, css, js,
+c, h,
+cpp, hpp, cc, hh,
+cs
+```
+
+---
+
+## Default excluded directories
+
+```text
+.git, .svn, .hg
+__pycache__, .pytest_cache
+node_modules
+venv, .venv
+dist, build
+.idea, .vscode
+.bundlemaker
+bundles
+```
+
+---
+
+## Bundle format
+
+Generated bundles follow this structure:
+
+```text
+=== BUNDLE GENERATED: 2026-03-09T12:34:56 ===
+=== REL_ROOT: C:\project ===
+
+=== FILE: src/main.py ===
+print("hello")
+=== END FILE: src/main.py ===
+```
+
+---
+
+## Safety features
+
+BundleMaker includes:
+
+- atomic file writes
+- root boundary checks
+- path traversal prevention
+- manifest-based patch tracking
+- backup handling
+- duplicate STEP 3 lock
+- disk verification after patch
+- restore verification after rollback
+- quarantine support for created files
+
+---
+
+## Auto-read safeguards
+
+Auto-read may skip:
+
+- files larger than 5MB
+- binary files
+- sensitive names such as `.env`, `id_rsa`
+- sensitive extensions such as `.pem`, `.key`, `.pfx`, `.crt`
+
+---
+
+## Recommended usage order
+
+```text
+1. Configure rules
+2. Create bundle
+3. Send bundle to LLM
+4. Save modified result as bundle_modified.txt
+5. Run patch
+6. Check verify reports
+7. Restore if necessary
+```
+
+For important projects, start with:
+
+- `DRY RUN`
+- then `SAFE`
+- use `FULL` only when needed
+
+---
+
+## Current status
+
+BundleMaker is currently a **personal experimental tool** focused on text-based source projects and LLM-assisted workflows.
+
+It is practical for personal use and internal tooling, but still evolving.
+
+---
+
+## Best use cases
+
+- multi-file LLM code review
+- whole-project context packaging
+- safer LLM-assisted patch workflows
+- educational / experimental coding
+- internal developer tooling
+- research prototypes
+
+---
+
+## Summary
+
+**BundleMaker v2.2.0 helps turn multi-file codebases into a single LLM-friendly bundle, then safely apply, verify, and restore changes through a structured workflow.**
